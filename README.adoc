@@ -1,5 +1,138 @@
 = InstructLab Playground
-
+Álvaro López Medina <alopezme@redhat.com>
+v1.0, 2024-09
+// Metadata
+:description: This repository is my playground to learn what is `Instructlab` and how can I get the most out of it!
+:keywords: openshift, red hat, rhoai, instructlab, ai, rhel
+// Create TOC wherever needed
+:toc: macro
+:sectanchors:
+:sectnumlevels: 2
+:sectnums: 
+:source-highlighter: pygments
+:imagesdir: docs/images
+// Start: Enable admonition icons
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+// Icons for GitHub
+:yes: :heavy_check_mark:
+:no: :x:
+endif::[]
+ifndef::env-github[]
+:icons: font
+// Icons not for GitHub
+:yes: icon:check[]
+:no: icon:times[]
+endif::[]
+// End: Enable admonition icons
 
 This repository is my playground to learn what is `Instructlab` and how can I get the most out of it!
 
+
+// Create the Table of contents here
+toc::[]
+
+== Introduction
+
+*InstructLab* is an open source project that provides a platform for easy engagement with AI Large Language Models (LLM) by using the ilab command-line interface (CLI) tool.
+
+
+NOTE: This repository is based on the open-source Instructlab, but it will follow the downstream documentation from RHEL AI. If you are interested in support and guidance from Red Hat, I recommend you to check the https://docs.redhat.com/en/documentation/red_hat_enterprise_linux_ai/1.2[official documentation].
+
+
+
+// A *large language model (LLM)* is a type of artificial intelligence (AI) model that uses deep learning techniques to understand and generate human-like text based on input data.
+
+
+
+
+== Deploy RHEL AI on AWS
+
+Even if you have an NVIDIA GPU on your laptop, you will be interested at some point to use other more powerful GPUs to fine-tune and deploy your LLMs. For that purpose, I have created a straight forward automation of the official documentation to upload the RHEL AI image as an AMI, in order to use it as a VM. The process consists of two simple steps:
+
+
+=== Step 0: AWS credentials
+
+First, you will need to create an `aws-env-vars` file and fill the following variables:
+
+[source, bash]
+----
+# CHECK VARIABLE VALUES ARE BETWEEN DOUBLE QUOTES!
+export AWS_ACCESS_KEY_ID=""
+export AWS_SECRET_ACCESS_KEY=""
+export AWS_DEFAULT_REGION=""
+
+export RHEL_AI_RAW_IMAGE_URL="" # The URL to download the RAW version of the RHEL AI Image
+----
+
+Then, you just need to source it to use the variables in the Ansible Playbook:
+
+[source, bash]
+----
+source ./aws-env-vars
+----
+
+=== Step 1: Create an SSH Key pair
+
+
+[source, bash]
+----
+ansible-playbook playbooks/aws_keypair_create.yml
+----
+
+
+=== Step 2: Convert the RHEL AI Image to an AWS AMI
+
+Before deploying the RHEL VM, we need to download the RHEL AI Raw image and push it to AWS to create an AMI:
+
+[source, bash]
+----
+ansible-playbook -vv playbooks/aws_ec2_create_rhelai_ami.yml
+----
+
+
+=== Step 3: Deploy an instance on AWS
+
+Finally, create an RHEL AI instance on AWS using the following Ansible Playbook:
+
+[source, bash]
+----
+ansible-playbook -vv playbooks/aws_ec2_create_instance.yml
+----
+
+
+
+== Using the RHEL AI VM
+
+The easiest way to get value from RHEL AI is that you can clone your git repo with your taxonomy and fine-tune the repo using `Instructlab`.
+
+.How can i be sure if the gpu is in use or not under instructlab ?
+====
+$ nvtop
+====
+
+
+== Useful links
+
+
+* https://github.com/instructlab/instructlab
+* https://huggingface.co/instructlab 
+* https://medium.com/@manojjahgirdar/learn-how-to-train-an-open-source-large-language-model-llm-with-instructlab-part-1-skills-5f64a23a8263
+* https://github.com/instructlab/instructlab/blob/main/docs/gpu-acceleration.md#%EF%B8%8F-making-ilab-go-fast
+// * https://redhat-internal.slack.com/archives/C072Y48PW91/p1724885516424349?thread_ts=1724838404.729509&cid=C072Y48PW91
+* https://github.com/RedHatOfficial/rhelai-dev-preview
+* https://github.com/open-webui/open-webui
+
+
+
+
+
+== Annex: Multiple Python environments in Fedora
+
+Unfortunately, at the time of writing, `torch` does not have GPU-specific support for the latest Python (3.12), so if you're on Linux, it's recommended to set up a Python 3.11-specific `venv` and install `ilab` to that to minimize issues. 
+
+To handle that, I recommend using the https://developer.fedoraproject.org/tech/languages/python/multiple-pythons.html[official guide from the Fedora Project].
