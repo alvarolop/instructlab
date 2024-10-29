@@ -5,23 +5,23 @@
   vars_files:
     - ./ansible_vars.yml
   tasks:
-    # Task 1: Create the EC2 key pair in AWS
-    - name: Create a new EC2 key pair
+
+    - name: Check if the EC2 key pair exists
+      amazon.aws.ec2_key_info:
+        region: "{{ region }}"
+      register: existing_keypairs
+
+    - name: Create a new EC2 key pair in AWS
       amazon.aws.ec2_key:
         name: "{{ key_name }}"  # Name of the key pair
-        region: eu-west-1  # AWS region
+        region: "{{ region }}" # AWS region
         state: present
       register: ec2_keypair
+      when: key_name not in (existing_keypairs.keypairs | map(attribute='key_name') | list)
 
-    # Task 2: Store the private key locally
     - name: Save the private key to a local file
-      copy:
+      ansible.builtin.copy:
         content: "{{ ec2_keypair.key.private_key }}"  # Private key content from AWS
         dest: "{{ key_path }}"  # Path where the private key will be stored locally
         mode: '0600'  # Set secure permissions on the key file (readable only by the user)
-
-    # Task 3: Verify key file permissions
-    - name: Ensure the key file has correct permissions
-      file:
-        path: "{{ key_path }}"
-        mode: '0600'  # Set file permissions to read/write for the user only (secure for SSH)
+      when: ec2_keypair.key.private_key is defined

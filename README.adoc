@@ -81,7 +81,7 @@ source ./aws-env-vars
 
 [source, bash]
 ----
-ansible-playbook playbooks/aws_keypair_create.yml
+ansible-playbook -vv playbooks/aws_keypair_create.yml
 ----
 
 
@@ -101,7 +101,7 @@ Finally, create an RHEL AI instance on AWS using the following Ansible Playbook:
 
 [source, bash]
 ----
-ansible-playbook -vv playbooks/aws_ec2_create_instance.yml
+ansible-playbook -vv playbooks/aws_ec2_create_vm.yml
 ----
 
 
