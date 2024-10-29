@@ -15,19 +15,24 @@ ami_name: "rhel-ai"
 raw_image_download_location: "../disk.raw"
 ami_display_name: "RHEL AI 1.2"
 
-volume_size: 1000              # EBS volume size (adjust as per your needs)
-device_name: /dev/sda1
+###########
+# EC2 Configuration
+###########
 
-###########
-# EC2 Instance
-###########
 vpc_cidr: "10.1.0.0/16"        # CIDR for VPC
 subnet_cidr: "10.1.1.0/24"     # CIDR for subnet
 availability_zone: eu-west-1a  # Choose an availability zone in eu-west-1
 region: eu-west-1              # Your preferred AWS region
+
+###########
+# EC2 Instance
+###########
+
 # https://aws.amazon.com/ec2/instance-types/
 # https://aws.amazon.com/ec2/pricing/on-demand/
 instance_type: g5.2xlarge      # Choose an instance type with GPU (1.35€/h)
+volume_size: 1000              # EBS volume size (adjust as per your needs)
+device_name: /dev/sda1
 # ami_id: ami-07d4917b6f95f5c2a  # RHEL 9 AMI for the eu-west-1 region
 
 ###########

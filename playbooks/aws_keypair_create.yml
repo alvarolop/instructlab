@@ -23,5 +23,5 @@
       ansible.builtin.copy:
         content: "{{ ec2_keypair.key.private_key }}"  # Private key content from AWS
         dest: "{{ key_path }}"  # Path where the private key will be stored locally
-        mode: '0600'  # Set secure permissions on the key file (readable only by the user)
+        mode: '0400'  # Set secure permissions on the key file (readable only by the user)
       when: ec2_keypair.key.private_key is defined
