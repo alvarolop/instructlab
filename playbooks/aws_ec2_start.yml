@@ -1,0 +1,29 @@
+---
+- name: Start the EC2 instance
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - ./ansible_vars.yml
+  tasks:
+    - name: Get instance ID of the EC2 instance
+      amazon.aws.ec2_instance_info:
+        filters:
+          "tag:Name": "{{ instance_name }}"  # Filter by instance name
+        region: "{{ region }}"
+      register: ec2_instance
+
+    - name: Start the EC2 instance
+      amazon.aws.ec2_instance:
+        instance_ids: "{{ ec2_instance.instances[0].instance_id }}"
+        state: started  # Change the state to 'running' to start the instance
+        wait: true
+        region: "{{ region }}"
+      register: start_result
+
+    - name: Print the result of starting the instance
+      debug:
+        msg: "The EC2 instance with ID {{ ec2_instance.instances[0].instance_id }} has been started."
+
+    - name: Print SSH command to access the instance
+      debug:
+        msg: "SSH into your instance using: ssh -i {{ key_path }} ec2-user@{{ ec2_instance.instances[0].public_dns_name }}"
