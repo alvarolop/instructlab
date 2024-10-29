@@ -120,6 +120,18 @@ aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | "\(.Tags[] | s
 ----
 
 
+=== Manage instance lifecycle
+
+
+Do you want to manage the lifecycle of your RHEL AI instance using Ansible? I have also playbooks for you!!
+
+[source, bash]
+----
+ansible-playbook -vv playbooks/aws_ec2_start.yml
+ansible-playbook -vv playbooks/aws_ec2_stop.yml
+ansible-playbook -vv playbooks/aws_ec2_terminate.yml
+----
+
 
 == Using the RHEL AI VM
 
