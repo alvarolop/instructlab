@@ -40,6 +40,7 @@ toc::[]
 
 *InstructLab* is an open source project that provides a platform for easy engagement with AI Large Language Models (LLM) by using the ilab command-line interface (CLI) tool.
 
+Red Hat Enterprise Linux AI is distributed and installable as a bootable image. This bootable image includes a container that hold various software and tools for RHEL AI.
 
 NOTE: This repository is based on the open-source Instructlab, but it will follow the downstream documentation from RHEL AI. If you are interested in support and guidance from Red Hat, I recommend you to check the https://docs.redhat.com/en/documentation/red_hat_enterprise_linux_ai/1.2[official documentation].
 
@@ -104,16 +105,113 @@ Finally, create an RHEL AI instance on AWS using the following Ansible Playbook:
 ansible-playbook -vv playbooks/aws_ec2_create_vm.yml
 ----
 
+You should be able to connect to your instance using a command like the following:
+
+[source, bash]
+----
+ssh -i ~/.ssh/aws-gpu-key.pem cloud-user@$PublicDnsName
+----
+
+If you forgot the DNS name, you can use the following command:
+
+[source, bash]
+----
+aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | "\(.Tags[] | select(.Key == "Name").Value) \(.State.Name) \(.PublicDnsName)"' 
+----
+
 
 
 == Using the RHEL AI VM
 
 The easiest way to get value from RHEL AI is that you can clone your git repo with your taxonomy and fine-tune the repo using `Instructlab`.
 
-.How can i be sure if the gpu is in use or not under instructlab ?
-====
-$ nvtop
-====
+
+=== Check GPU usage
+
+How can i be sure if the gpu is in use or not under `instructlab` VM?
+
+[source, bash]
+----
+nvtop
+----
+
+The output in the terminal should be something like this:
+
+.Output of the nvtop command
+image::nvtop-output.png["Output of the nvtop command"]
+
+
+
+=== Disable Red Hat Insights
+
+To run RHEL AI in a disconnected environment, or opt out of Red Hat Insights, run the following commands:
+
+[source, bash]
+----
+sudo mkdir -p /etc/ilab
+sudo touch /etc/ilab/insights-opt-out
+----
+
+
+=== Init instructlab
+
+Initialize InstructLab by running the following command:
+
+[source, bash]
+----
+ilab config init
+----
+
+
+=== Check instruct lab system info
+
+You can ask `instructlab` to inspect the node and gather all the requirements with the following command:
+
+[source, bash]
+----
+ilab system info
+----
+
+This is the output for my deployment:
+
+[source, text]
+----
+sys.version: 3.11.7 (main, Aug 23 2024, 00:00:00) [GCC 11.4.1 20231218 (Red Hat 11.4.1-3)]
+sys.platform: linux
+os.name: posix
+platform.release: 5.14.0-427.37.1.el9_4.x86_64
+platform.machine: x86_64
+platform.node: ip-10-1-1-49.eu-west-1.compute.internal
+platform.python_version: 3.11.7
+os-release.ID: rhel
+os-release.VERSION_ID: 9.4
+os-release.PRETTY_NAME: Red Hat Enterprise Linux 9.4 (Plow)
+instructlab.version: 0.19.3
+instructlab-dolomite.version: 0.1.1
+instructlab-eval.version: 0.3.1
+instructlab-quantize.version: 0.1.0
+instructlab-schema.version: 0.4.1
+instructlab-sdg.version: 0.3.0
+instructlab-training.version: 0.5.4
+torch.version: 2.3.1
+torch.backends.cpu.capability: AVX2
+torch.version.cuda: 12.4
+torch.version.hip: None
+torch.cuda.available: True
+torch.backends.cuda.is_built: True
+torch.backends.mps.is_built: False
+torch.backends.mps.is_available: False
+torch.cuda.bf16: True
+torch.cuda.current.device: 0
+torch.cuda.0.name: NVIDIA A10G
+torch.cuda.0.free: 21.7 GB
+torch.cuda.0.total: 22.0 GB
+torch.cuda.0.capability: 8.6 (see https://developer.nvidia.com/cuda-gpus#compute)
+llama_cpp_python.version: 0.2.79
+llama_cpp_python.supports_gpu_offload: True
+----
+
+
 
 
 == Useful links
