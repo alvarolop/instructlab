@@ -1,0 +1,138 @@
+---
+# This Ansible playbook automates the creation of an EC2 instance with NVIDIA GPU in AWS eu-west-1.
+# The playbook will:
+# 1. Create a new VPC (Virtual Private Cloud) to isolate the resources.
+# 2. Create a subnet within the VPC in a specific availability zone.
+# 3. Creates a security group that allows SSH access (port 22) and Jupyter Notebook access (port 8888).
+# 4. Launch an EC2 instance with GPU (g4dn.xlarge), attach a storage volume, and install RHEL 9.
+# 5. Wait for the instance to become reachable via SSH.
+# 6. Dynamically add the instance to the Ansible inventory.
+# 7. Print out the instance details (IP, ID, etc.) for your reference.
+
+- name: Create an EC2 instance with NVIDIA GPU for machine learning
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - ./ansible_vars.yml
+
+  tasks:
+    - name: Create a Virtual Private Cloud "{{ vpc_name }}"
+      amazon.aws.ec2_vpc_net:
+        name: "{{ vpc_name }}"  # Add a name to identify the VPC
+        cidr_block: "{{ vpc_cidr }}"
+        region: "{{ region }}"
+        state: present
+      register: vpc
+
+    - name: Create a Subnet "{{ subnet_name }}" in the VPC
+      amazon.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: "{{ subnet_cidr }}"
+        region: "{{ region }}"
+        az: "{{ availability_zone }}"
+        map_public: true
+        tags:
+          Name: "{{ subnet_name }}"  # Add a name to identify the Subnet
+        state: present
+      register: subnet
+
+    - name: Create a Security Group in the VPC
+      amazon.aws.ec2_security_group:
+        name: "{{ security_group_name }}"
+        description: Security group for EC2 GPU instance
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ region }}"
+        rules:
+          - proto: tcp
+            from_port: 22  # SSH access
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 8888  # Allow Jupyter Notebook port
+            to_port: 8888
+            cidr_ip: 0.0.0.0/0
+      register: security_group
+
+    - name: Attach the Internet Gateway to the VPC
+      amazon.aws.ec2_vpc_igw:
+        vpc_id: "{{ vpc.vpc.id }}"  # VPC where your instances are
+        region: "{{ region }}"
+        state: present              # Attach the IGW to the VPC
+        tags:
+          Name: "{{ igw_name }}"    # Provide a name tag here
+      register: igw                 # Store the result to use in later tasks
+
+    - name: Get route table associated with the subnet
+      amazon.aws.ec2_vpc_route_table_info:
+        region: "{{ region }}"
+        filters:
+          vpc-id: "{{ vpc.vpc.id }}"
+      register: route_table_info
+
+    - name: Create or update a route in the route table to the Internet Gateway
+      amazon.aws.ec2_vpc_route_table:
+        route_table_id: "{{ route_table_info.route_tables[0].route_table_id }}"
+        lookup: id
+        vpc_id: "{{ vpc.vpc.id }}"
+        subnets:
+          - "{{ subnet.subnet.id }}"
+        routes:
+          - dest: "0.0.0.0/0"
+            gateway_id: "{{ igw.gateway_id }}"
+        tags:
+          Name: "{{ rtb_name }}"    # Provide a name tag here
+        region: "{{ region }}"
+        state: present
+
+    - name: Search for the AMI with name "rhel-ai"
+      amazon.aws.ec2_ami_info:
+        region: "{{ region }}"
+        filters:
+          "name": "rhel-ai"
+      register: ami_info
+
+    - name: Set ami_id as a fact
+      set_fact:
+        ami_id: "{{ ami_info.images[0].image_id }}"
+
+    - name: Launch EC2 instance with GPU
+      amazon.aws.ec2_instance:
+        name: "{{ instance_name }}"
+        key_name: "{{ key_name }}"
+        instance_type: "{{ instance_type }}"
+        region: "{{ region }}"
+        image_id: "{{ ami_id }}"
+        wait: yes
+        vpc_subnet_id: "{{ subnet.subnet.id }}"
+        security_group: "{{ security_group.group_id }}"
+        volumes:
+          - device_name: "{{ device_name }}"
+            ebs:  # Nested EBS properties
+              volume_type: gp2
+              volume_size: "{{ volume_size }}"  # Specify volume size
+        network:
+          assign_public_ip: true
+        exact_count: 1 # An integer value which indicates how many instances that match the filters parameter should be running.
+      register: ec2_instance
+
+    - name: Wait for SSH to come up
+      ansible.builtin.wait_for:
+        host: "{{ ec2_instance.instances[0].public_dns_name }}"
+        port: 22
+        delay: 15
+        timeout: 900
+      delegate_to: localhost
+
+    - name: Display instance details
+      debug:
+        # var: ec2_instance
+        msg: "Instance {{ ec2_instance.instances[0].key_name }} is {{ ec2_instance.instances[0].state.name }}" 
+
+    - name: Add instance to the host group to dynamically add newly created EC2 instances (or other hosts) to an inventory group
+      add_host:
+        name: "{{ ec2_instance.instances[0].public_dns_name }}"
+        groups: gpu_ec2
+
+    - name: Print SSH command to access the instance
+      debug:
+        msg: "SSH into your instance using: ssh -i {{ key_path }} cloud-user@{{ ec2_instance.instances[0].public_dns_name }}"
