@@ -164,9 +164,9 @@
         tags:
           Name: "{{ ami_display_name }}"
         architecture: x86_64
-        root_device_name: /dev/sda1
+        root_device_name: "{{ device_name }}"
         device_mapping:
-          - device_name: /dev/sda1
+          - device_name: "{{ device_name }}"
             volume_size: "{{ volume_size }}"
             snapshot_id: "{{ snapshot_id }}"
         virtualization_type: hvm
@@ -177,4 +177,4 @@
     - name: Print ami_result
       ansible.builtin.debug:
         var: ami_result
-      when: ansible_verbosity >= 2 and ami_facts_result.images | length == 0
+      when: ansible_verbosity >= 2
