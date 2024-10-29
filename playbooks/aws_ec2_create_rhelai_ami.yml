@@ -1,0 +1,180 @@
+- name: Convert the RHEL AI image into an Amazon Machine Image (AMI)
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - ./ansible_vars.yml
+
+  vars:
+    rhel_ai_raw_image_url: "{{ lookup('env', 'RHEL_AI_RAW_IMAGE_URL') }}"
+    generated_env_suffix: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_lowercase','digits'], length=8) }}"
+
+  tasks:
+
+    - name: Set env_suffix
+      ansible.builtin.set_fact:
+        env_suffix: "{{ generated_env_suffix }}"
+
+    - name: Set fixed bucket name for this execution
+      ansible.builtin.set_fact:
+        s3_bucket_name: "{{ s3_bucket_prefix }}-{{ env_suffix }}"
+
+    - name: Create S3 bucket for image storage
+      amazon.aws.s3_bucket:
+        name: "{{ s3_bucket_name }}"
+        state: present
+        region: "{{ region }}"
+    
+    # Trust Policy (assume role policy document):
+    # * This policy defines who can assume the IAM role.
+    # * It grants permissions to AWS services (like vmie.amazonaws.com) or users to assume the role via AWS Security Token Service (STS).
+    # * In your case, it allows the vmie.amazonaws.com service to assume the role, which is required for VM import.
+    - name: Create IAM role for S3 bucket
+      amazon.aws.iam_role:
+        name: "{{ iam_role_name }}"
+        assume_role_policy_document: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "vmie.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "sts:Externalid": "{{ iam_role_name }}"
+                  }
+                }
+              }
+            ]
+          }
+        state: present
+
+    # Role Policy (inline policy attached to the role):
+    # * This policy defines what actions the IAM role is allowed to perform once assumed.
+    # * It grants permissions like accessing the S3 bucket and EC2 operations (e.g., creating snapshots, registering images).
+    - name: Attach policy to IAM role
+      amazon.aws.iam_policy:
+        iam_type: role
+        iam_name: "{{ iam_role_name }}"
+        policy_name: "{{ iam_role_name }}-{{ s3_bucket_name }}"
+        policy_json: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetBucketLocation",
+                  "s3:GetObject",
+                  "s3:ListBucket"
+                ],
+                "Resource": [
+                  "arn:aws:s3:::{{ s3_bucket_name }}",
+                  "arn:aws:s3:::{{ s3_bucket_name }}/*"
+                ]
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "ec2:ModifySnapshotAttribute",
+                  "ec2:CopySnapshot",
+                  "ec2:RegisterImage",
+                  "ec2:Describe*"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+        state: present
+
+    - name: Download the RHEL AI RAW image (~50GB) with progressbar. Open new terminal and execute "watch ls -lah {{ raw_image_download_location }}"
+      ansible.builtin.command: >
+        curl -L "{{ rhel_ai_raw_image_url }}"
+        -o "{{ raw_image_download_location }}"
+        --progress-bar
+      args:
+        creates: "{{ raw_image_download_location }}"
+
+    - name: Upload the image to the S3 bucket
+      amazon.aws.aws_s3:
+        bucket: "{{ s3_bucket_name }}"
+        object: "{{ raw_ami_object_name }}"
+        src: "{{ raw_image_download_location }}" 
+        mode: put
+
+    - name: Convert the RAW image to an AWS snapshot 
+      ansible.builtin.command: >
+        aws ec2 import-snapshot --disk-container '{
+          "Description": "my-image",
+          "Format": "raw",
+          "UserBucket": {
+            "S3Bucket": "{{ s3_bucket_name }}",
+            "S3Key": "{{ raw_ami_object_name }}"
+          }
+        }'
+      register: import_snapshot_result
+      changed_when: false
+
+    - name: Extract Task ID from the JSON result
+      ansible.builtin.set_fact:
+        task_id: "{{ import_snapshot_result.stdout | from_json | json_query('ImportTaskId') }}"
+
+    - name: Print the Task ID
+      ansible.builtin.debug:
+        var: task_id 
+      when: ansible_verbosity >= 2
+
+    - name: Wait until Snapshot is completed
+      ansible.builtin.command: >
+        aws ec2 describe-import-snapshot-tasks --import-task-ids "{{ task_id }}"
+      register: describe_snapshots_result
+      until: describe_snapshots_result.stdout | from_json | json_query("ImportSnapshotTasks[0].SnapshotTaskDetail.Status") == 'completed'
+      retries: 30
+      delay: 60
+      changed_when: false
+
+    - name: Extract Snapshot ID from the JSON result
+      ansible.builtin.set_fact:
+        snapshot_id: "{{ describe_snapshots_result.stdout | from_json | json_query('ImportSnapshotTasks[0].SnapshotTaskDetail.SnapshotId') }}"
+
+    - name: Display the Snapshot ID
+      ansible.builtin.debug:
+        msg: "The Snapshot ID is: {{ snapshot_id }} and it generated from the ImportSnapshotTasks {{ task_id }}"
+
+    - name: Add a tag name to the snapshot
+      amazon.aws.ec2_tag:
+        resource: "{{ snapshot_id }}"
+        tags:
+          Name: "{{ ami_name }}"
+
+    - name: Show info about image
+      amazon.aws.ec2_import_image_info:
+        filters:
+          - Name: "tag:Name"
+            Values: ["import-rhel-ai-image"]
+      when: ansible_verbosity >= 2
+
+    - name: Register an AMI from the snapshot
+      amazon.aws.ec2_ami:
+        name: "{{ ami_name }}"
+        description: "{{ ami_name }}"
+        tags:
+          Name: "{{ ami_display_name }}"
+        architecture: x86_64
+        root_device_name: /dev/sda1
+        device_mapping:
+          - device_name: /dev/sda1
+            volume_size: "{{ volume_size }}"
+            snapshot_id: "{{ snapshot_id }}"
+        virtualization_type: hvm
+        enhanced_networking: true
+        wait: true
+      register: ami_result
+
+    - name: Print ami_result
+      ansible.builtin.debug:
+        var: ami_result
+      when: ansible_verbosity >= 2 and ami_facts_result.images | length == 0
