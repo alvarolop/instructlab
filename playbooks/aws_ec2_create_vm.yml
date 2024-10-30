@@ -137,4 +137,4 @@
 
     - name: Print SSH command to access the instance
       debug:
-        msg: "SSH into your instance using: ssh -i {{ key_path }} cloud-user@{{ ec2_instance.instances[0].public_dns_name }}"
+        msg: "SSH into your instance using: ssh -i {{ key_path }} {{ vm_user }}@{{ ec2_instance.instances[0].public_dns_name }}"
