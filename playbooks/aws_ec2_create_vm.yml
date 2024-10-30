@@ -117,8 +117,8 @@
             ebs:  # Nested EBS properties
               volume_type: gp2
               volume_size: "{{ volume_size }}"  # Specify volume size
-        network:
-          assign_public_ip: true
+        network_interfaces:
+          - assign_public_ip: true
         exact_count: 1 # An integer value which indicates how many instances that match the filters parameter should be running.
       register: ec2_instance
 
@@ -139,8 +139,6 @@
       add_host:
         name: "{{ ec2_instance.instances[0].public_dns_name }}"
         groups: gpu_ec2
-
-
 
     - name: Print SSH command to access the instance
       debug:
