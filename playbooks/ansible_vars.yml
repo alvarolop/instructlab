@@ -15,9 +15,6 @@ ami_name: "rhel-ai"
 raw_image_download_location: "../disk.raw"
 ami_display_name: "RHEL AI 1.2"
 
-# vm_user: "cloud-user" # User for RHEL AI
-vm_user: "ec2-user" # User for RHEL 9
-
 ###########
 # EC2 Configuration
 ###########
