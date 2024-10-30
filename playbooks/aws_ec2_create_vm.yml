@@ -16,6 +16,11 @@
     - ./ansible_vars.yml
 
   tasks:
+
+    - name: Set vm_user based on whether ami_id is defined
+      set_fact:
+        vm_user: "{{ 'ec2-user' if ami_id is defined else 'cloud-user' }}"
+
     - name: Create a Virtual Private Cloud "{{ vpc_name }}"
       amazon.aws.ec2_vpc_net:
         name: "{{ vpc_name }}"  # Add a name to identify the VPC
@@ -135,9 +140,7 @@
         name: "{{ ec2_instance.instances[0].public_dns_name }}"
         groups: gpu_ec2
 
-    - name: Set vm_user based on whether ami_id is defined
-      set_fact:
-        vm_user: "{{ 'ec2-user' if ami_id is defined else 'cloud-user' }}"
+
 
     - name: Print SSH command to access the instance
       debug:
