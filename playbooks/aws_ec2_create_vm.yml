@@ -90,10 +90,12 @@
         filters:
           "name": "rhel-ai"
       register: ami_info
+      when: ami_id is not defined
 
     - name: Set ami_id as a fact
       set_fact:
         ami_id: "{{ ami_info.images[0].image_id }}"
+      when: ami_id is not defined
 
     - name: Launch EC2 instance with GPU
       amazon.aws.ec2_instance:
